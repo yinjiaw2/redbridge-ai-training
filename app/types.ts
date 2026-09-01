@@ -113,6 +113,7 @@ export type TrainingRecord = {
   durationSeconds: number;
   completedAt: string;
   evaluation: TrainingEvaluation;
-  outcome: "completed" | "failed";
+  outcome:
+    "signed" | "frozen" | "considering" | "refused" | "completed" | "failed";
   failureReason?: string;
 };

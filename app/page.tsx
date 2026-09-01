@@ -55,6 +55,19 @@ type AdminView =
   | "assignments"
   | "reviews"
   | "analytics";
+type CustomerOutcome = "signed" | "frozen" | "considering" | "refused";
+const outcomeLabels: Record<CustomerOutcome, string> = {
+  signed: "客户成功签约",
+  frozen: "客户进入冷冻期",
+  considering: "客户进入考虑期",
+  refused: "客户拒绝聊",
+};
+const getOutcomeLabel = (outcome: TrainingRecord["outcome"]) =>
+  outcome === "failed"
+    ? outcomeLabels.refused
+    : outcome === "completed"
+      ? "训练已完成"
+      : outcomeLabels[outcome];
 const scoreRows = [
   ["需求挖掘", 16, 20],
   ["沟通表达", 13, 15],
@@ -723,7 +736,7 @@ function Chat({
   onEnd: (
     m: TrainingMessage[],
     durationSeconds: number,
-    failed?: boolean,
+    outcome?: CustomerOutcome,
     failureReason?: string,
   ) => void;
   onBack: () => void;
@@ -742,6 +755,7 @@ function Chat({
     "connecting" | "ai" | "mock"
   >("connecting");
   const [secs, setSecs] = useState(0);
+  const [choosingOutcome, setChoosingOutcome] = useState(false);
   const end = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const t = setInterval(() => setSecs((s) => s + 1), 1000);
@@ -799,7 +813,8 @@ function Chat({
       setResponseMode("ai");
       if (result.failed) {
         window.setTimeout(
-          () => onEnd(completedMessages, secs, true, customerMessage.content),
+          () =>
+            onEnd(completedMessages, secs, "refused", customerMessage.content),
           900,
         );
       }
@@ -962,14 +977,41 @@ function Chat({
           </ul>
         </div>
         <button
-          onClick={() =>
-            confirm("确定要结束本次训练吗？") && onEnd(messages, secs)
-          }
+          onClick={() => setChoosingOutcome(true)}
           className="mt-8 w-full rounded-xl border border-rose-200 px-4 py-3 text-xs font-semibold text-rose-600"
         >
           结束训练
         </button>
       </aside>
+      {choosingOutcome && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/55 p-5">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+            <h2 className="text-lg font-bold">选择本次客户结果</h2>
+            <p className="mt-2 text-xs leading-5 text-slate-500">
+              该结果会与完整对话和评分一起保存，管理员可以查看。
+            </p>
+            <div className="mt-5 grid gap-3">
+              {(
+                Object.entries(outcomeLabels) as [CustomerOutcome, string][]
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  onClick={() => onEnd(messages, secs, value)}
+                  className={`rounded-xl border px-4 py-3 text-left text-sm font-semibold transition hover:border-brand hover:bg-red-50 ${value === "refused" ? "text-red-700" : "text-zinc-800"}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => setChoosingOutcome(false)}
+              className="mt-4 w-full text-xs font-semibold text-slate-500"
+            >
+              继续对话
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1001,7 +1043,15 @@ function Result({
       <div className="rounded-2xl bg-[#18181b] p-8 text-white">
         <div className="flex flex-col justify-between gap-6 md:flex-row">
           <div>
-            <Pill tone="green">已完成评审</Pill>
+            <Pill
+              tone={
+                record.outcome === "refused" || record.outcome === "failed"
+                  ? "red"
+                  : "green"
+              }
+            >
+              {getOutcomeLabel(record.outcome)}
+            </Pill>
             <h1 className="mt-4 text-2xl font-bold">{record.scenario.title}</h1>
             <p className="mt-2 text-sm text-zinc-300">
               完成于 {new Date(record.completedAt).toLocaleString("zh-CN")} ·
@@ -1216,8 +1266,17 @@ function AdminTable({
               <td>{record.scenario.title}</td>
               <td>{new Date(record.completedAt).toLocaleString("zh-CN")}</td>
               <td>
-                <Pill tone={record.outcome === "failed" ? "red" : "green"}>
-                  {record.outcome === "failed" ? "对话失败" : "已自动评审"}
+                <Pill
+                  tone={
+                    record.outcome === "failed" || record.outcome === "refused"
+                      ? "red"
+                      : record.outcome === "considering" ||
+                          record.outcome === "frozen"
+                        ? "amber"
+                        : "green"
+                  }
+                >
+                  {getOutcomeLabel(record.outcome)}
                 </Pill>
               </td>
               <td>
@@ -1606,8 +1665,17 @@ function ResultTable({ records }: { records: TrainingRecord[] }) {
                 <b>{record.evaluation.overallScore}</b> /100
               </td>
               <td>
-                <Pill tone={record.outcome === "failed" ? "red" : "green"}>
-                  {record.outcome === "failed" ? "对话失败" : "已评审"}
+                <Pill
+                  tone={
+                    record.outcome === "failed" || record.outcome === "refused"
+                      ? "red"
+                      : record.outcome === "considering" ||
+                          record.outcome === "frozen"
+                        ? "amber"
+                        : "green"
+                  }
+                >
+                  {getOutcomeLabel(record.outcome)}
                 </Pill>
               </td>
             </tr>
@@ -1738,7 +1806,7 @@ export default function App() {
   const finishTraining = async (
     trainingMessages: TrainingMessage[],
     durationSeconds: number,
-    failed = false,
+    outcome: CustomerOutcome = "considering",
     failureReason?: string,
   ) => {
     if (!scenario) return;
@@ -1748,7 +1816,8 @@ export default function App() {
       body: JSON.stringify({
         messages: trainingMessages,
         difficulty: scenario.difficulty,
-        failed,
+        failed: outcome === "refused",
+        outcome,
       }),
     });
     const evaluation = (await evaluationResponse.json()) as TrainingEvaluation;
@@ -1761,7 +1830,7 @@ export default function App() {
       durationSeconds,
       completedAt: new Date().toISOString(),
       evaluation,
-      outcome: failed ? "failed" : "completed",
+      outcome,
       failureReason,
     };
     const saveResponse = await fetch("/api/training-records", {
@@ -1803,8 +1872,8 @@ export default function App() {
           <Chat
             scenario={scenario}
             onBack={() => setScenario(null)}
-            onEnd={(m, seconds, failed, reason) =>
-              void finishTraining(m, seconds, failed, reason)
+            onEnd={(m, seconds, outcome, reason) =>
+              void finishTraining(m, seconds, outcome, reason)
             }
           />
         </Shell>
