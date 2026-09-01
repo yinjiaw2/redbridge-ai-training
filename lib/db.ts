@@ -66,5 +66,19 @@ export async function ensureSchema() {
       PRIMARY KEY (quiz_id, username)
     )
   `;
+  await sql`
+    CREATE TABLE IF NOT EXISTS redbridge_training_records (
+      id TEXT PRIMARY KEY,
+      username TEXT NOT NULL,
+      learner TEXT NOT NULL,
+      scenario_id TEXT NOT NULL,
+      data JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS redbridge_training_records_username_idx
+    ON redbridge_training_records (username, created_at DESC)
+  `;
   return sql;
 }

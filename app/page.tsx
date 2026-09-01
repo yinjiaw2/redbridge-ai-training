@@ -35,7 +35,12 @@ import {
   Users,
   X,
 } from "lucide-react";
-import type { Scenario, TrainingMessage } from "./types";
+import type {
+  Scenario,
+  TrainingEvaluation,
+  TrainingMessage,
+  TrainingRecord,
+} from "./types";
 import { demoCustomers, demoScenarios, mockReply } from "./data";
 
 type Role = "student" | "admin";
@@ -95,10 +100,30 @@ function Pill({
   );
 }
 
-function Login({ onLogin }: { onLogin: (r: Role) => void }) {
+function Login({ onLogin }: { onLogin: (r: Role, name: string) => void }) {
   const [email, setEmail] = useState("student@example.com");
   const [password, setPassword] = useState("demo1234");
   const [show, setShow] = useState(false);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const login = async (username = email, secret = password) => {
+    setLoading(true);
+    setError("");
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password: secret, remember: true }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "登录失败");
+      onLogin(result.role === "admin" ? "admin" : "student", result.name);
+    } catch (loginError) {
+      setError(loginError instanceof Error ? loginError.message : "登录失败");
+    } finally {
+      setLoading(false);
+    }
+  };
   return (
     <main className="login-shell min-h-screen p-4 sm:p-7">
       <div className="mx-auto grid min-h-[calc(100vh-56px)] max-w-[1240px] overflow-hidden rounded-[30px] bg-white shadow-[0_26px_80px_rgba(31,52,44,.13)] lg:grid-cols-[1.08fr_.92fr]">
@@ -146,7 +171,7 @@ function Login({ onLogin }: { onLogin: (r: Role) => void }) {
           <form
             onSubmit={(e: FormEvent) => {
               e.preventDefault();
-              onLogin(email.startsWith("admin") ? "admin" : "student");
+              void login();
             }}
             className="w-full max-w-[430px]"
           >
@@ -188,8 +213,9 @@ function Login({ onLogin }: { onLogin: (r: Role) => void }) {
                 {show ? "隐藏" : "显示"}
               </button>
             </div>
-            <button className="btn-primary mt-7 h-12 w-full">
-              登录 <ChevronRight size={17} />
+            {error && <p className="mt-4 text-xs text-red-600">{error}</p>}
+            <button disabled={loading} className="btn-primary mt-7 h-12 w-full">
+              {loading ? "登录中…" : "登录"} <ChevronRight size={17} />
             </button>
             <div className="my-7 flex items-center gap-3 text-xs text-slate-400">
               <span className="h-px flex-1 bg-slate-200" />
@@ -199,7 +225,7 @@ function Login({ onLogin }: { onLogin: (r: Role) => void }) {
             <div className="grid gap-3 sm:grid-cols-2">
               <button
                 type="button"
-                onClick={() => onLogin("student")}
+                onClick={() => void login("student@example.com", "demo1234")}
                 className="demo-account"
               >
                 <GraduationCap size={18} />
@@ -210,13 +236,16 @@ function Login({ onLogin }: { onLogin: (r: Role) => void }) {
               </button>
               <button
                 type="button"
-                onClick={() => onLogin("admin")}
+                onClick={() => {
+                  setEmail("admin");
+                  setPassword("");
+                }}
                 className="demo-account"
               >
                 <ShieldCheck size={18} />
                 <span>
                   <b>管理端</b>
-                  <small>admin@example.com</small>
+                  <small>填写管理员密码登录</small>
                 </span>
               </button>
             </div>
@@ -476,9 +505,11 @@ function PerformanceCard() {
 function StudentDashboard({
   onStart,
   onView,
+  records,
 }: {
   onStart: (s: Scenario) => void;
   onView: (v: StudentView) => void;
+  records: TrainingRecord[];
 }) {
   return (
     <Page>
@@ -574,7 +605,7 @@ function StudentDashboard({
             <p>近 30 天已完成训练</p>
           </div>
         </div>
-        <ResultTable />
+        <ResultTable records={records.slice(0, 5)} />
       </section>
     </Page>
   );
@@ -678,7 +709,12 @@ function Chat({
   onBack,
 }: {
   scenario: Scenario;
-  onEnd: (m: TrainingMessage[]) => void;
+  onEnd: (
+    m: TrainingMessage[],
+    durationSeconds: number,
+    failed?: boolean,
+    failureReason?: string,
+  ) => void;
   onBack: () => void;
 }) {
   const [messages, setMessages] = useState<TrainingMessage[]>([
@@ -727,18 +763,35 @@ function Chat({
         }),
       });
       if (!response.ok) throw new Error("AI response unavailable");
-      const result = (await response.json()) as { content?: string };
+      const result = (await response.json()) as {
+        content?: string;
+        failed?: boolean;
+      };
       if (!result.content?.trim()) throw new Error("AI response was empty");
-      setMessages((m) => [
-        ...m,
+      const customerMessage: TrainingMessage = {
+        id: makeMessageId(),
+        sender: "CUSTOMER",
+        content: result.content!.trim(),
+        time: "现在",
+      };
+      const completedMessages = [
+        ...messages,
         {
           id: makeMessageId(),
-          sender: "CUSTOMER",
-          content: result.content!.trim(),
+          sender: "STUDENT" as const,
+          content,
           time: "现在",
         },
-      ]);
+        customerMessage,
+      ];
+      setMessages(completedMessages);
       setResponseMode("ai");
+      if (result.failed) {
+        window.setTimeout(
+          () => onEnd(completedMessages, secs, true, customerMessage.content),
+          900,
+        );
+      }
     } catch {
       await new Promise((resolve) => setTimeout(resolve, 700));
       setMessages((m) => [
@@ -898,7 +951,9 @@ function Chat({
           </ul>
         </div>
         <button
-          onClick={() => confirm("确定要结束本次训练吗？") && onEnd(messages)}
+          onClick={() =>
+            confirm("确定要结束本次训练吗？") && onEnd(messages, secs)
+          }
           className="mt-8 w-full rounded-xl border border-rose-200 px-4 py-3 text-xs font-semibold text-rose-600"
         >
           结束训练
@@ -909,12 +964,20 @@ function Chat({
 }
 
 function Result({
-  messages,
+  record,
   onBack,
 }: {
-  messages: TrainingMessage[];
+  record: TrainingRecord;
   onBack: () => void;
 }) {
+  const scoreValues = [
+    record.evaluation.scores.needsDiscovery,
+    record.evaluation.scores.communication,
+    record.evaluation.scores.knowledge,
+    record.evaluation.scores.objectionHandling,
+    record.evaluation.scores.conversationControl,
+    record.evaluation.scores.closing,
+  ];
   return (
     <Page>
       <button
@@ -928,16 +991,17 @@ function Result({
         <div className="flex flex-col justify-between gap-6 md:flex-row">
           <div>
             <Pill tone="green">已完成评审</Pill>
-            <h1 className="mt-4 text-2xl font-bold">
-              485 市场营销客户 — 价格敏感型
-            </h1>
+            <h1 className="mt-4 text-2xl font-bold">{record.scenario.title}</h1>
             <p className="mt-2 text-sm text-zinc-300">
-              完成于 2026年9月1日 · 用时 08:42
+              完成于 {new Date(record.completedAt).toLocaleString("zh-CN")} ·
+              用时 {Math.floor(record.durationSeconds / 60)}:
+              {String(record.durationSeconds % 60).padStart(2, "0")}
             </p>
           </div>
           <div className="text-center">
             <div className="text-5xl font-bold">
-              81<span className="text-xl opacity-50">/100</span>
+              {record.evaluation.overallScore}
+              <span className="text-xl opacity-50">/100</span>
             </div>
             <span className="text-xs opacity-60">综合评分 · 良好</span>
           </div>
@@ -947,18 +1011,18 @@ function Result({
         <section className="card p-6">
           <h2 className="font-bold">能力评分</h2>
           <div className="mt-6 space-y-5">
-            {scoreRows.map(([x, n, max]) => (
+            {scoreRows.map(([x, , max], index) => (
               <div key={x}>
                 <div className="mb-2 flex justify-between text-xs">
                   <span>{x}</span>
                   <b>
-                    {n}/{max}
+                    {scoreValues[index]}/{max}
                   </b>
                 </div>
                 <div className="h-2 rounded-full bg-slate-100">
                   <div
                     className="h-full rounded-full bg-brand"
-                    style={{ width: `${(n / max) * 100}%` }}
+                    style={{ width: `${(scoreValues[index] / max) * 100}%` }}
                   />
                 </div>
               </div>
@@ -969,24 +1033,28 @@ function Result({
           <Feedback
             icon={Star}
             title="表现亮点"
-            text="能够快速识别签证时效和工作经验两个关键信息；解释清晰，语气专业且有同理心。"
+            text={record.evaluation.strengths}
           />
           <Feedback
             icon={TrendingUp}
             title="提升建议"
-            text="在讨论费用前，可先进一步确认客户的雇主情况与时间安排。"
+            text={record.evaluation.improvements}
           />
           <Feedback
             icon={MessageCircle}
             title="培训师反馈"
-            text="整体节奏很好。下一次尝试把开放式问题放在建议之前。"
+            text={
+              record.evaluation.deductions.length
+                ? record.evaluation.deductions.join("；")
+                : "本次没有触发明确扣分项。"
+            }
           />
         </section>
       </div>
       <section className="card mt-5 p-6">
         <h2 className="font-bold">对话记录</h2>
         <div className="mt-5 space-y-4">
-          {messages.map((m) => (
+          {record.messages.map((m) => (
             <div
               key={m.id}
               className={`flex ${m.sender === "STUDENT" ? "justify-end" : ""}`}
@@ -1023,7 +1091,13 @@ function Feedback({
   );
 }
 
-function AdminDashboard({ setView }: { setView: (v: AdminView) => void }) {
+function AdminDashboard({
+  setView,
+  records,
+}: {
+  setView: (v: AdminView) => void;
+  records: TrainingRecord[];
+}) {
   return (
     <Page>
       <Title
@@ -1073,7 +1147,7 @@ function AdminDashboard({ setView }: { setView: (v: AdminView) => void }) {
               查看全部 <ChevronRight size={14} />
             </button>
           </div>
-          <AdminTable />
+          <AdminTable records={records} />
         </section>
         <PerformanceCard />
       </div>
@@ -1102,7 +1176,7 @@ function AdminDashboard({ setView }: { setView: (v: AdminView) => void }) {
     </Page>
   );
 }
-function AdminTable() {
+function AdminTable({ records }: { records: TrainingRecord[] }) {
   return (
     <div className="table-wrap mt-5">
       <table>
@@ -1116,25 +1190,30 @@ function AdminTable() {
           </tr>
         </thead>
         <tbody>
-          {[
-            ["Jamie Lee", "485 市场营销客户", "今天 09:49", "待评审", "—"],
-            ["Ethan Wang", "IT 开发者信任顾虑", "昨天 16:32", "已评审", "82"],
-            ["Sofia Chen", "学生签证会计客户", "昨天 14:18", "已评审", "76"],
-          ].map((r, i) => (
-            <tr key={i}>
+          {records.map((record) => (
+            <tr key={record.id}>
               <td>
-                <b>{r[0]}</b>
+                <b>{record.learner}</b>
               </td>
-              <td>{r[1]}</td>
-              <td>{r[2]}</td>
+              <td>{record.scenario.title}</td>
+              <td>{new Date(record.completedAt).toLocaleString("zh-CN")}</td>
               <td>
-                <Pill tone={r[3] === "待评审" ? "amber" : "green"}>{r[3]}</Pill>
+                <Pill tone={record.outcome === "failed" ? "red" : "green"}>
+                  {record.outcome === "failed" ? "对话失败" : "已自动评审"}
+                </Pill>
               </td>
               <td>
-                <b>{r[4]}</b>
+                <b>{record.evaluation.overallScore}</b>
               </td>
             </tr>
           ))}
+          {!records.length && (
+            <tr>
+              <td colSpan={5} className="text-center text-slate-400">
+                暂无已保存训练记录
+              </td>
+            </tr>
+          )}
         </tbody>
       </table>
     </div>
@@ -1227,7 +1306,13 @@ function Customers() {
     </Page>
   );
 }
-function Reviews({ onReview }: { onReview: () => void }) {
+function Reviews({
+  records,
+  onReview,
+}: {
+  records: TrainingRecord[];
+  onReview: () => void;
+}) {
   return (
     <Page>
       <Title
@@ -1258,10 +1343,12 @@ function Reviews({ onReview }: { onReview: () => void }) {
         />
       </div>
       <div className="card mt-5 overflow-hidden">
-        <AdminTable />
-        <button onClick={onReview} className="btn-primary m-5">
-          开始评审 Jamie Lee
-        </button>
+        <AdminTable records={records} />
+        {!!records.length && (
+          <button onClick={onReview} className="btn-primary m-5">
+            打开人工评分面板
+          </button>
+        )}
       </div>
     </Page>
   );
@@ -1413,7 +1500,7 @@ function GenericAdmin({ view }: { view: AdminView }) {
     </Page>
   );
 }
-function ResultTable() {
+function ResultTable({ records }: { records: TrainingRecord[] }) {
   return (
     <div className="table-wrap mt-5">
       <table>
@@ -1427,31 +1514,47 @@ function ResultTable() {
           </tr>
         </thead>
         <tbody>
-          {[
-            ["价格敏感型客户", "8月28日", "09:21", "82"],
-            ["紧急型客户", "8月23日", "11:04", "74"],
-            ["持怀疑态度客户", "8月16日", "08:46", "79"],
-          ].map((r, i) => (
-            <tr key={i}>
+          {records.map((record) => (
+            <tr key={record.id}>
               <td>
-                <b>{r[0]}</b>
-              </td>
-              <td>{r[1]}</td>
-              <td>{r[2]}</td>
-              <td>
-                <b>{r[3]}</b> /100
+                <b>{record.scenario.title}</b>
               </td>
               <td>
-                <Pill tone="green">已评审</Pill>
+                {new Date(record.completedAt).toLocaleDateString("zh-CN")}
+              </td>
+              <td>
+                {Math.floor(record.durationSeconds / 60)}:
+                {String(record.durationSeconds % 60).padStart(2, "0")}
+              </td>
+              <td>
+                <b>{record.evaluation.overallScore}</b> /100
+              </td>
+              <td>
+                <Pill tone={record.outcome === "failed" ? "red" : "green"}>
+                  {record.outcome === "failed" ? "对话失败" : "已评审"}
+                </Pill>
               </td>
             </tr>
           ))}
+          {!records.length && (
+            <tr>
+              <td colSpan={5} className="text-center text-slate-400">
+                完成训练后，记录会自动保存在这里
+              </td>
+            </tr>
+          )}
         </tbody>
       </table>
     </div>
   );
 }
-function SimpleStudent({ view }: { view: StudentView }) {
+function SimpleStudent({
+  view,
+  records,
+}: {
+  view: StudentView;
+  records: TrainingRecord[];
+}) {
   const title = {
     dashboard: "工作台",
     training: "训练中心",
@@ -1478,7 +1581,7 @@ function SimpleStudent({ view }: { view: StudentView }) {
         </div>
       ) : (
         <div className="card mt-6 p-6">
-          <ResultTable />
+          <ResultTable records={records} />
         </div>
       )}
     </Page>
@@ -1514,12 +1617,95 @@ function Title({
 
 export default function App() {
   const [role, setRole] = useState<Role | null>(null);
+  const [sessionLoading, setSessionLoading] = useState(true);
+  const [learnerName, setLearnerName] = useState("Jamie Lee");
   const [studentView, setStudentView] = useState<StudentView>("dashboard");
   const [adminView, setAdminView] = useState<AdminView>("dashboard");
   const [scenario, setScenario] = useState<Scenario | null>(null);
-  const [messages, setMessages] = useState<TrainingMessage[] | null>(null);
+  const [currentRecord, setCurrentRecord] = useState<TrainingRecord | null>(
+    null,
+  );
+  const [records, setRecords] = useState<TrainingRecord[]>([]);
   const [review, setReview] = useState(false);
-  if (!role) return <Login onLogin={setRole} />;
+  useEffect(() => {
+    fetch("/api/auth/session", { cache: "no-store" })
+      .then(async (response) => (response.ok ? response.json() : null))
+      .then((session) => {
+        if (session) {
+          setRole(session.role === "admin" ? "admin" : "student");
+          setLearnerName(session.name);
+        }
+      })
+      .finally(() => setSessionLoading(false));
+  }, []);
+  useEffect(() => {
+    if (!role) return;
+    fetch("/api/training-records", { cache: "no-store" })
+      .then(async (response) => (response.ok ? response.json() : []))
+      .then((savedRecords) => setRecords(savedRecords));
+  }, [role]);
+  const logout = async () => {
+    await fetch("/api/auth/logout", { method: "POST" });
+    setRole(null);
+    setCurrentRecord(null);
+    setRecords([]);
+  };
+  const finishTraining = async (
+    trainingMessages: TrainingMessage[],
+    durationSeconds: number,
+    failed = false,
+    failureReason?: string,
+  ) => {
+    if (!scenario) return;
+    const evaluationResponse = await fetch("/api/training-evaluation", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        messages: trainingMessages,
+        difficulty: scenario.difficulty,
+        failed,
+      }),
+    });
+    const evaluation = (await evaluationResponse.json()) as TrainingEvaluation;
+    const record: TrainingRecord = {
+      id: `training-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      username: "",
+      learner: learnerName,
+      scenario,
+      messages: trainingMessages,
+      durationSeconds,
+      completedAt: new Date().toISOString(),
+      evaluation,
+      outcome: failed ? "failed" : "completed",
+      failureReason,
+    };
+    const saveResponse = await fetch("/api/training-records", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(record),
+    });
+    const savedRecord = saveResponse.ok
+      ? ((await saveResponse.json()) as TrainingRecord)
+      : record;
+    setRecords((existing) => [savedRecord, ...existing]);
+    setCurrentRecord(savedRecord);
+    setScenario(null);
+  };
+  if (sessionLoading)
+    return (
+      <main className="grid min-h-screen place-items-center text-sm text-slate-500">
+        正在恢复登录状态…
+      </main>
+    );
+  if (!role)
+    return (
+      <Login
+        onLogin={(nextRole, name) => {
+          setRole(nextRole);
+          setLearnerName(name);
+        }}
+      />
+    );
   if (role === "student") {
     if (scenario)
       return (
@@ -1527,27 +1713,29 @@ export default function App() {
           role="student"
           view="training"
           setView={setStudentView}
-          onLogout={() => setRole(null)}
+          onLogout={() => void logout()}
         >
           <Chat
             scenario={scenario}
             onBack={() => setScenario(null)}
-            onEnd={(m) => {
-              setMessages(m);
-              setScenario(null);
-            }}
+            onEnd={(m, seconds, failed, reason) =>
+              void finishTraining(m, seconds, failed, reason)
+            }
           />
         </Shell>
       );
-    if (messages)
+    if (currentRecord)
       return (
         <Shell
           role="student"
           view="history"
           setView={setStudentView}
-          onLogout={() => setRole(null)}
+          onLogout={() => void logout()}
         >
-          <Result messages={messages} onBack={() => setMessages(null)} />
+          <Result
+            record={currentRecord}
+            onBack={() => setCurrentRecord(null)}
+          />
         </Shell>
       );
     return (
@@ -1555,14 +1743,18 @@ export default function App() {
         role="student"
         view={studentView}
         setView={setStudentView}
-        onLogout={() => setRole(null)}
+        onLogout={() => void logout()}
       >
         {studentView === "dashboard" ? (
-          <StudentDashboard onStart={setScenario} onView={setStudentView} />
+          <StudentDashboard
+            onStart={setScenario}
+            onView={setStudentView}
+            records={records}
+          />
         ) : studentView === "training" ? (
           <TrainingLibrary onStart={setScenario} />
         ) : (
-          <SimpleStudent view={studentView} />
+          <SimpleStudent view={studentView} records={records} />
         )}
       </Shell>
     );
@@ -1572,16 +1764,16 @@ export default function App() {
       role="admin"
       view={adminView}
       setView={setAdminView}
-      onLogout={() => setRole(null)}
+      onLogout={() => void logout()}
     >
       {review ? (
         <ReviewPanel onDone={() => setReview(false)} />
       ) : adminView === "dashboard" ? (
-        <AdminDashboard setView={setAdminView} />
+        <AdminDashboard setView={setAdminView} records={records} />
       ) : adminView === "customers" ? (
         <Customers />
       ) : adminView === "reviews" ? (
-        <Reviews onReview={() => setReview(true)} />
+        <Reviews records={records} onReview={() => setReview(true)} />
       ) : (
         <GenericAdmin view={adminView} />
       )}

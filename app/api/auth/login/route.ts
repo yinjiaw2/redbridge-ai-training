@@ -15,9 +15,30 @@ export async function POST(request: Request) {
         "redbridge_session",
         await createSession(
           { role: "admin", name: "管理员", username: "admin" },
-          false,
+          true,
         ),
-        sessionCookie(false),
+        sessionCookie(true),
+      );
+      return response;
+    }
+    if (
+      ["student", "student@example.com"].includes(
+        String(username).toLowerCase(),
+      ) &&
+      password === "demo1234"
+    ) {
+      const response = NextResponse.json({
+        role: "learner",
+        name: "Jamie Lee",
+        username: "student",
+      });
+      response.cookies.set(
+        "redbridge_session",
+        await createSession(
+          { role: "learner", name: "Jamie Lee", username: "student" },
+          true,
+        ),
+        sessionCookie(true),
       );
       return response;
     }

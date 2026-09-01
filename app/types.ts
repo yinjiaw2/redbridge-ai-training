@@ -88,3 +88,31 @@ export type TrainingMessage = {
   content: string;
   time: string;
 };
+
+export type TrainingEvaluation = {
+  scores: {
+    needsDiscovery: number;
+    communication: number;
+    knowledge: number;
+    objectionHandling: number;
+    conversationControl: number;
+    closing: number;
+  };
+  overallScore: number;
+  strengths: string;
+  improvements: string;
+  deductions: string[];
+};
+
+export type TrainingRecord = {
+  id: string;
+  username: string;
+  learner: string;
+  scenario: Scenario;
+  messages: TrainingMessage[];
+  durationSeconds: number;
+  completedAt: string;
+  evaluation: TrainingEvaluation;
+  outcome: "completed" | "failed";
+  failureReason?: string;
+};
