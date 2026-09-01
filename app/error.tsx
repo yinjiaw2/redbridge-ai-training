@@ -16,6 +16,7 @@ export default function ErrorPage({
 
   const diagnostic =
     error.message?.slice(0, 500) || error.digest || "Unknown client error";
+  const stack = error.stack?.split("\n").slice(0, 8).join("\n").slice(0, 1800);
 
   return (
     <main className="grid min-h-screen place-items-center bg-[#f7f7f8] p-6">
@@ -36,6 +37,11 @@ export default function ErrorPage({
           <code className="mt-2 block break-words text-xs leading-5 text-red-200">
             {diagnostic}
           </code>
+          {stack && (
+            <pre className="mt-3 max-h-52 overflow-auto whitespace-pre-wrap break-all border-t border-zinc-800 pt-3 text-[10px] leading-4 text-zinc-300">
+              {stack}
+            </pre>
+          )}
           {error.digest && error.digest !== diagnostic && (
             <code className="mt-2 block text-[10px] text-zinc-400">
               Digest: {error.digest}
