@@ -1,0 +1,229 @@
+import { NextResponse } from "next/server";
+import { ensureSchema } from "../../../lib/db";
+import { readSession } from "../../../lib/auth";
+import {
+  learners,
+  seedQuestionBanks,
+  seedQuizzes,
+  stateManagerEssay,
+} from "../../data";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+const retiredDemoQuizIds = new Set(["product-03", "privacy-101", "conduct"]);
+const currentDemoQuizIds = new Set(seedQuizzes.map((quiz) => quiz.id));
+const essayFormatVersion = "2026-08-20-word-exact-paragraphs-v1";
+const questionBankCategoriesVersion = "2026-08-24-sales-operations-images-v2";
+const learnerNameVersion = "2026-08-24-wang-to-eric-v1";
+
+export async function GET() {
+  try {
+    const sql = await ensureSchema();
+    let rows = await sql`SELECT data FROM redbridge_state WHERE id = 'main'`;
+    if (!rows.length) {
+      const initialData = {
+        quizzes: seedQuizzes,
+        questionBanks: seedQuestionBanks,
+        learnerRecords: [],
+        announcement: "",
+        announcementPersistent: false,
+      };
+      rows = await sql`
+        INSERT INTO redbridge_state (id, data)
+        VALUES ('main', ${JSON.stringify(initialData)}::jsonb)
+        ON CONFLICT (id) DO UPDATE SET data = redbridge_state.data
+        RETURNING data
+      `;
+    }
+    let users =
+      await sql`SELECT username, name FROM redbridge_users ORDER BY created_at`;
+    const data = rows[0].data;
+    const shouldRenameTestLearner =
+      data.learnerNameVersion !== learnerNameVersion;
+    if (shouldRenameTestLearner) {
+      await sql`
+        UPDATE redbridge_users
+        SET name = 'eric测试'
+        WHERE name = '王测试'
+      `;
+      await sql`
+        UPDATE redbridge_attempts
+        SET learner = 'eric测试',
+            data = jsonb_set(data, '{learner}', to_jsonb('eric测试'::text), true)
+        WHERE learner = '王测试' OR data->>'learner' = '王测试'
+      `;
+      await sql`
+        UPDATE redbridge_attempt_drafts
+        SET learner = 'eric测试',
+            data = jsonb_set(data, '{learner}', to_jsonb('eric测试'::text), true)
+        WHERE learner = '王测试' OR data->>'learner' = '王测试'
+      `;
+      users = users.map((user) =>
+        user.name === "王测试" ? { ...user, name: "eric测试" } : user,
+      );
+      data.learnerRecords = (data.learnerRecords || []).map((learner: any) =>
+        learner.name === "王测试" ? { ...learner, name: "eric测试" } : learner,
+      );
+      data.learnerNameVersion = learnerNameVersion;
+    }
+    const shouldInitializeQuestionBanks = !Array.isArray(data.questionBanks);
+    if (shouldInitializeQuestionBanks) data.questionBanks = seedQuestionBanks;
+    const shouldUpdateQuestionBankCategories =
+      data.questionBankCategoriesVersion !== questionBankCategoriesVersion;
+    if (shouldUpdateQuestionBankCategories) {
+      data.questionBanks = (data.questionBanks || []).map((bank: any) =>
+        bank.id === "redbridge-training-core"
+          ? { ...bank, title: "销售题库" }
+          : bank,
+      );
+      const operationsBank = seedQuestionBanks.find(
+        (bank) => bank.id === "mkt-operations-final",
+      );
+      if (
+        operationsBank &&
+        !data.questionBanks.some((bank: any) => bank.id === operationsBank.id)
+      )
+        data.questionBanks.push(operationsBank);
+      else if (operationsBank)
+        data.questionBanks = data.questionBanks.map((bank: any) =>
+          bank.id === operationsBank.id
+            ? {
+                ...bank,
+                questions: (bank.questions || []).map((question: any) => {
+                  const seededQuestion = operationsBank.questions.find(
+                    (item) => item.id === question.id,
+                  );
+                  return seededQuestion?.image || seededQuestion?.referenceImage
+                    ? {
+                        ...question,
+                        image: seededQuestion.image,
+                        referenceImage: seededQuestion.referenceImage,
+                      }
+                    : question;
+                }),
+              }
+            : bank,
+        );
+      data.quizzes = (data.quizzes || []).map((quiz: any) => ({
+        ...quiz,
+        questions: (quiz.questions || []).map((question: any) => {
+          const text = String(question.text || "");
+          if (text.includes("当观测到聚光后台出现以下数据时"))
+            return {
+              ...question,
+              image:
+                question.image || "/question-images/mkt-dashboard-data.png",
+            };
+          if (text.includes("本次搜索推广日预算为¥2,000"))
+            return {
+              ...question,
+              image: question.image || "/question-images/mkt-keyword-table.png",
+              referenceImage:
+                question.referenceImage ||
+                "/question-images/mkt-keyword-reference.png",
+            };
+          return question;
+        }),
+      }));
+      data.questionBankCategoriesVersion = questionBankCategoriesVersion;
+    }
+    const shouldUpdateEssayFormat =
+      data.essayFormatVersion !== essayFormatVersion;
+    if (shouldUpdateEssayFormat) {
+      const isStateManagerEssay = (question: any) =>
+        question?.type === "essay" &&
+        String(question.text || "").includes(
+          "如何在90天内建立一个相互制衡、协同作战且不依赖个人的州级运营单元",
+        );
+      data.questionBanks = (data.questionBanks || []).map((bank: any) => ({
+        ...bank,
+        questions: (bank.questions || []).map((question: any) =>
+          isStateManagerEssay(question)
+            ? { ...question, text: stateManagerEssay, wordLimit: 1000 }
+            : question,
+        ),
+      }));
+      data.quizzes = (data.quizzes || []).map((quiz: any) => ({
+        ...quiz,
+        questions: (quiz.questions || []).map((question: any) =>
+          isStateManagerEssay(question)
+            ? { ...question, text: stateManagerEssay, wordLimit: 1000 }
+            : question,
+        ),
+      }));
+      data.essayFormatVersion = essayFormatVersion;
+    }
+    const storedQuizzes = data.quizzes || [];
+    const shouldReplaceRetiredDemos = storedQuizzes.some((quiz: any) =>
+      retiredDemoQuizIds.has(quiz.id),
+    );
+    if (shouldReplaceRetiredDemos) {
+      data.quizzes = [
+        ...seedQuizzes,
+        ...storedQuizzes.filter(
+          (quiz: any) =>
+            !retiredDemoQuizIds.has(quiz.id) &&
+            !currentDemoQuizIds.has(quiz.id),
+        ),
+      ];
+    }
+    const demoEmails = new Set(learners.map((learner) => learner.email));
+    const originalLearners = data.learnerRecords || [];
+    const existing = originalLearners.filter(
+      (learner: any) => !demoEmails.has(learner.email),
+    );
+    const learnerRecords = [
+      ...existing,
+      ...users
+        .filter(
+          (user) =>
+            !existing.some((learner: any) => learner.email === user.username),
+        )
+        .map((user) => ({
+          name: user.name,
+          email: user.username,
+          department: "运营",
+          completed: 0,
+          testAccount: false,
+        })),
+    ];
+    if (
+      shouldReplaceRetiredDemos ||
+      shouldInitializeQuestionBanks ||
+      shouldUpdateQuestionBankCategories ||
+      shouldUpdateEssayFormat ||
+      shouldRenameTestLearner ||
+      existing.length !== originalLearners.length
+    ) {
+      data.learnerRecords = learnerRecords;
+      await sql`
+        UPDATE redbridge_state
+        SET data = ${JSON.stringify(data)}::jsonb, updated_at = NOW()
+        WHERE id = 'main'
+      `;
+    }
+    return NextResponse.json({ ...data, learnerRecords });
+  } catch (error) {
+    return NextResponse.json({ error: String(error) }, { status: 503 });
+  }
+}
+
+export async function PUT(request: Request) {
+  try {
+    const session = await readSession();
+    if (session?.role !== "admin")
+      return NextResponse.json({ error: "无权修改管理数据" }, { status: 403 });
+    const data = await request.json();
+    const sql = await ensureSchema();
+    await sql`
+      INSERT INTO redbridge_state (id, data, updated_at)
+      VALUES ('main', ${JSON.stringify(data)}::jsonb, NOW())
+      ON CONFLICT (id) DO UPDATE
+      SET data = redbridge_state.data || EXCLUDED.data, updated_at = NOW()
+    `;
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    return NextResponse.json({ error: String(error) }, { status: 503 });
+  }
+}

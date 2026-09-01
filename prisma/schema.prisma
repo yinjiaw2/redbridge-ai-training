@@ -1,0 +1,205 @@
+generator client { provider = "prisma-client-js" }
+datasource db { provider = "postgresql"; url = env("DATABASE_URL") }
+
+enum Role { ADMIN STUDENT }
+enum UserStatus { ACTIVE INACTIVE }
+enum Difficulty { EASY MEDIUM HARD }
+enum IntentLevel { LOW MEDIUM HIGH }
+enum ProfileStatus { ACTIVE ARCHIVED }
+enum SourceType { MANUAL HISTORICAL_CONVERSATION AI_GENERATED }
+enum ConversationStatus { IMPORTED REVIEWED ARCHIVED }
+enum HistoricalSender { CUSTOMER STAFF }
+enum ScenarioStatus { DRAFT ACTIVE ARCHIVED }
+enum AssignmentStatus { ASSIGNED IN_PROGRESS COMPLETED OVERDUE }
+enum SessionStatus { IN_PROGRESS COMPLETED REVIEWED ABANDONED }
+enum TrainingSender { CUSTOMER STUDENT SYSTEM }
+enum EvaluationSource { HUMAN AI AI_REVIEWED_BY_HUMAN }
+
+model User {
+  id String @id @default(cuid())
+  name String
+  email String @unique
+  passwordHash String
+  role Role
+  status UserStatus @default(ACTIVE)
+  studentProfile StudentProfile?
+  assignments TrainingAssignment[] @relation("StudentAssignments")
+  assignedBy TrainingAssignment[] @relation("AssignedBy")
+  sessions TrainingSession[] @relation("StudentSessions")
+  reviewedSessions TrainingSession[] @relation("SessionReviewer")
+  evaluations TrainingEvaluation[]
+  scenarios TrainingScenario[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model StudentProfile {
+  id String @id @default(cuid())
+  userId String @unique
+  user User @relation(fields:[userId], references:[id], onDelete:Cascade)
+  department String?
+  position String?
+  trainerNotes String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model CustomerProfile {
+  id String @id @default(cuid())
+  displayName String
+  ageRange String?
+  industry String?
+  occupation String?
+  visaType String?
+  visaExpiryContext String?
+  workExperience String?
+  location String?
+  language String?
+  customerType String
+  intentLevel IntentLevel
+  urgencyLevel IntentLevel
+  priceSensitivity IntentLevel
+  trustLevel IntentLevel
+  communicationStyle String?
+  primaryGoal String?
+  painPoints Json?
+  objections Json?
+  background String?
+  notes String?
+  difficulty Difficulty
+  status ProfileStatus @default(ACTIVE)
+  sourceType SourceType @default(MANUAL)
+  historicalConversations HistoricalConversation[]
+  scenarios TrainingScenario[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model HistoricalConversation {
+  id String @id @default(cuid())
+  title String
+  customerProfileId String?
+  customerProfile CustomerProfile? @relation(fields:[customerProfileId], references:[id])
+  source String?
+  originalDate DateTime?
+  status ConversationStatus @default(IMPORTED)
+  messages HistoricalMessage[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model HistoricalMessage {
+  id String @id @default(cuid())
+  conversationId String
+  conversation HistoricalConversation @relation(fields:[conversationId], references:[id], onDelete:Cascade)
+  senderType HistoricalSender
+  content String
+  sequence Int
+  timestamp DateTime?
+  createdAt DateTime @default(now())
+  @@unique([conversationId, sequence])
+}
+
+model TrainingScenario {
+  id String @id @default(cuid())
+  title String
+  description String?
+  customerProfileId String
+  customerProfile CustomerProfile @relation(fields:[customerProfileId], references:[id])
+  difficulty Difficulty
+  trainingObjective String
+  openingMessage String
+  expectedSkills Json
+  estimatedDuration Int
+  status ScenarioStatus @default(DRAFT)
+  createdBy String
+  creator User @relation(fields:[createdBy], references:[id])
+  nodes ScenarioNode[]
+  assignments TrainingAssignment[]
+  sessions TrainingSession[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ScenarioNode {
+  id String @id @default(cuid())
+  scenarioId String
+  scenario TrainingScenario @relation(fields:[scenarioId], references:[id], onDelete:Cascade)
+  nodeKey String
+  customerMessage String
+  triggerKeywords Json
+  fallbackNodeId String?
+  sequence Int
+  createdAt DateTime @default(now())
+  @@unique([scenarioId, nodeKey])
+}
+
+model TrainingAssignment {
+  id String @id @default(cuid())
+  scenarioId String
+  scenario TrainingScenario @relation(fields:[scenarioId], references:[id])
+  studentId String
+  student User @relation("StudentAssignments", fields:[studentId], references:[id])
+  assignedById String
+  assigner User @relation("AssignedBy", fields:[assignedById], references:[id])
+  dueDate DateTime?
+  status AssignmentStatus @default(ASSIGNED)
+  session TrainingSession?
+  createdAt DateTime @default(now())
+  completedAt DateTime?
+}
+
+model TrainingSession {
+  id String @id @default(cuid())
+  scenarioId String
+  scenario TrainingScenario @relation(fields:[scenarioId], references:[id])
+  studentId String
+  student User @relation("StudentSessions", fields:[studentId], references:[id])
+  assignmentId String? @unique
+  assignment TrainingAssignment? @relation(fields:[assignmentId], references:[id])
+  status SessionStatus @default(IN_PROGRESS)
+  startedAt DateTime @default(now())
+  completedAt DateTime?
+  durationSeconds Int?
+  overallScore Int?
+  trainerFeedback String?
+  reviewedById String?
+  reviewer User? @relation("SessionReviewer", fields:[reviewedById], references:[id])
+  reviewedAt DateTime?
+  messages TrainingMessage[]
+  evaluation TrainingEvaluation?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model TrainingMessage {
+  id String @id @default(cuid())
+  sessionId String
+  session TrainingSession @relation(fields:[sessionId], references:[id], onDelete:Cascade)
+  senderType TrainingSender
+  content String
+  sequence Int
+  createdAt DateTime @default(now())
+  @@unique([sessionId, sequence])
+}
+
+model TrainingEvaluation {
+  id String @id @default(cuid())
+  sessionId String @unique
+  session TrainingSession @relation(fields:[sessionId], references:[id], onDelete:Cascade)
+  evaluatorId String
+  evaluator User @relation(fields:[evaluatorId], references:[id])
+  source EvaluationSource @default(HUMAN)
+  needsDiscoveryScore Int
+  communicationScore Int
+  knowledgeScore Int
+  objectionHandlingScore Int
+  conversationControlScore Int
+  closingScore Int
+  overallScore Int
+  strengths String?
+  improvements String?
+  feedback String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

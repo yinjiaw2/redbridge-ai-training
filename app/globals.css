@@ -1,0 +1,162 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+:root {
+  color-scheme: light;
+}
+* {
+  box-sizing: border-box;
+}
+html {
+  background: #f6f8f7;
+}
+body {
+  margin: 0;
+  color: #17221d;
+  font-family: Arial, "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+button {
+  cursor: pointer;
+}
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5ce;
+  border-radius: 10px;
+}
+.login-shell {
+  background:
+    radial-gradient(circle at 15% 20%, #e4f0e9, transparent 30%), #f2f5f3;
+}
+@layer components {
+  .card {
+    @apply rounded-2xl border border-slate-200/90 bg-white shadow-[0_2px_8px_rgba(25,45,37,.035)];
+  }
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#245b45];
+  }
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50;
+  }
+  .input {
+    @apply w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none transition placeholder:text-slate-400 focus:border-brand focus:ring-2 focus:ring-brand/10;
+  }
+  .label {
+    @apply mb-1.5 block text-sm font-semibold text-slate-700;
+  }
+  .demo-account {
+    @apply flex items-center gap-3 rounded-xl border border-slate-200 p-3 text-left text-brand transition hover:border-brand/40 hover:bg-mint;
+  }
+  .demo-account span {
+    @apply min-w-0;
+  }
+  .demo-account b {
+    @apply block text-xs text-slate-700;
+  }
+  .demo-account small {
+    @apply block truncate text-[10px] text-slate-400;
+  }
+  .nav-item {
+    @apply flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-500 transition hover:bg-slate-50 hover:text-slate-800;
+  }
+  .nav-active {
+    @apply bg-[#eaf4ee] font-semibold text-brand hover:bg-[#eaf4ee] hover:text-brand;
+  }
+  .stat-icon {
+    @apply grid h-10 w-10 place-items-center rounded-xl;
+  }
+  .stat-icon.green {
+    @apply bg-emerald-50 text-emerald-700;
+  }
+  .stat-icon.blue {
+    @apply bg-blue-50 text-blue-600;
+  }
+  .stat-icon.amber {
+    @apply bg-amber-50 text-amber-700;
+  }
+  .stat-icon.purple {
+    @apply bg-violet-50 text-violet-600;
+  }
+  .section-head {
+    @apply flex items-start justify-between;
+  }
+  .section-head h2 {
+    @apply text-sm font-bold;
+  }
+  .section-head p {
+    @apply mt-1 text-[11px] text-slate-400;
+  }
+  .text-link {
+    @apply inline-flex items-center gap-1 text-xs font-semibold text-brand;
+  }
+  .filter {
+    @apply inline-flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-semibold text-slate-600;
+  }
+  .hero-card {
+    background: linear-gradient(120deg, #173f34, #2f6e55);
+  }
+  .score-ring {
+    width: 134px;
+    height: 134px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: conic-gradient(#2f6e55 0 78%, #e8eeeb 78%);
+  }
+  .score-ring:before {
+    content: "";
+    position: absolute;
+    width: 104px;
+    height: 104px;
+    border-radius: 50%;
+    background: white;
+  }
+  .score-ring div {
+    position: relative;
+    text-align: center;
+  }
+  .score-ring b {
+    @apply block text-3xl;
+  }
+  .score-ring span {
+    @apply text-[10px] text-slate-400;
+  }
+  .table-wrap {
+    @apply overflow-x-auto;
+  }
+  .table-wrap table {
+    @apply w-full min-w-[680px] border-collapse text-left text-xs;
+  }
+  .table-wrap th {
+    @apply border-b border-slate-100 px-4 py-3 text-[10px] font-semibold uppercase tracking-wide text-slate-400;
+  }
+  .table-wrap td {
+    @apply border-b border-slate-100 px-4 py-4 text-slate-600;
+  }
+  .table-wrap tr:last-child td {
+    @apply border-b-0;
+  }
+  .table-wrap td b {
+    @apply text-slate-800;
+  }
+  .table-wrap td small {
+    @apply mt-1;
+  }
+  .message-bubble {
+    @apply rounded-2xl px-4 py-3 text-left text-sm leading-6 shadow-sm;
+  }
+  .message-bubble.customer {
+    @apply rounded-tl-sm border border-slate-100 bg-white text-slate-700;
+  }
+  .message-bubble.student {
+    @apply rounded-tr-sm bg-brand text-white;
+  }
+}
