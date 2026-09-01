@@ -39,5 +39,6 @@ export const sessionCookie = (remember = false) => ({
   sameSite: "lax" as const,
   secure: process.env.NODE_ENV === "production",
   path: "/",
+  priority: "high" as const,
   ...(remember ? { maxAge: 60 * 60 * 24 * 30 } : {}),
 });

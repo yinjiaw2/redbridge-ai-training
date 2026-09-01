@@ -104,20 +104,33 @@ function Login({ onLogin }: { onLogin: (r: Role, name: string) => void }) {
   const [email, setEmail] = useState("student@example.com");
   const [password, setPassword] = useState("demo1234");
   const [show, setShow] = useState(false);
+  const [registering, setRegistering] = useState(false);
+  const [name, setName] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const login = async (username = email, secret = password) => {
+  const login = async () => {
     setLoading(true);
     setError("");
     try {
-      const response = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password: secret, remember: true }),
-      });
+      const response = await fetch(
+        registering ? "/api/auth/register" : "/api/auth/login",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            username: email,
+            password,
+            name,
+            remember: true,
+          }),
+        },
+      );
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "登录失败");
-      onLogin(result.role === "admin" ? "admin" : "student", result.name);
+      onLogin(
+        result.role === "admin" ? "admin" : "student",
+        result.name || name,
+      );
     } catch (loginError) {
       setError(loginError instanceof Error ? loginError.message : "登录失败");
     } finally {
@@ -178,12 +191,31 @@ function Login({ onLogin }: { onLogin: (r: Role, name: string) => void }) {
             <div className="mb-10 lg:hidden">
               <Brand />
             </div>
-            <p className="text-sm font-semibold text-brand">欢迎回来</p>
-            <h2 className="mt-2 text-3xl font-bold">登录训练工作台</h2>
-            <p className="mt-3 text-sm text-slate-500">
-              使用演示账号探索学员与管理员完整流程。
+            <p className="text-sm font-semibold text-brand">
+              {registering ? "加入训练平台" : "欢迎回来"}
             </p>
-            <label className="label mt-8">邮箱</label>
+            <h2 className="mt-2 text-3xl font-bold">
+              {registering ? "注册学员账号" : "登录训练工作台"}
+            </h2>
+            <p className="mt-3 text-sm text-slate-500">
+              {registering
+                ? "创建账号后，训练记录会安全保存在 Neon。"
+                : "登录后继续训练并查看历史记录。"}
+            </p>
+            {registering && (
+              <>
+                <label className="label mt-8">姓名</label>
+                <input
+                  className="input h-12"
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  required
+                />
+              </>
+            )}
+            <label className={`label ${registering ? "mt-5" : "mt-8"}`}>
+              用户名或邮箱
+            </label>
             <input
               className="input h-12"
               value={email}
@@ -191,12 +223,6 @@ function Login({ onLogin }: { onLogin: (r: Role, name: string) => void }) {
             />
             <div className="mt-5 flex justify-between">
               <label className="label mb-0">密码</label>
-              <button
-                type="button"
-                className="text-xs font-semibold text-brand"
-              >
-                忘记密码？
-              </button>
             </div>
             <div className="relative">
               <input
@@ -215,40 +241,25 @@ function Login({ onLogin }: { onLogin: (r: Role, name: string) => void }) {
             </div>
             {error && <p className="mt-4 text-xs text-red-600">{error}</p>}
             <button disabled={loading} className="btn-primary mt-7 h-12 w-full">
-              {loading ? "登录中…" : "登录"} <ChevronRight size={17} />
+              {loading
+                ? registering
+                  ? "注册中…"
+                  : "登录中…"
+                : registering
+                  ? "创建账号"
+                  : "登录"}{" "}
+              <ChevronRight size={17} />
             </button>
-            <div className="my-7 flex items-center gap-3 text-xs text-slate-400">
-              <span className="h-px flex-1 bg-slate-200" />
-              快速体验
-              <span className="h-px flex-1 bg-slate-200" />
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <button
-                type="button"
-                onClick={() => void login("student@example.com", "demo1234")}
-                className="demo-account"
-              >
-                <GraduationCap size={18} />
-                <span>
-                  <b>学员端</b>
-                  <small>student@example.com</small>
-                </span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setEmail("admin");
-                  setPassword("");
-                }}
-                className="demo-account"
-              >
-                <ShieldCheck size={18} />
-                <span>
-                  <b>管理端</b>
-                  <small>填写管理员密码登录</small>
-                </span>
-              </button>
-            </div>
+            <button
+              type="button"
+              className="mx-auto mt-5 block text-sm font-semibold text-brand"
+              onClick={() => {
+                setRegistering((value) => !value);
+                setError("");
+              }}
+            >
+              {registering ? "已有账号？返回登录" : "没有账号？注册新账号"}
+            </button>
             <p className="mt-7 flex items-center justify-center gap-2 text-xs text-slate-400">
               <ShieldCheck size={13} />
               仅使用匿名化的虚拟客户数据
@@ -1176,7 +1187,13 @@ function AdminDashboard({
     </Page>
   );
 }
-function AdminTable({ records }: { records: TrainingRecord[] }) {
+function AdminTable({
+  records,
+  onSelect,
+}: {
+  records: TrainingRecord[];
+  onSelect?: (record: TrainingRecord) => void;
+}) {
   return (
     <div className="table-wrap mt-5">
       <table>
@@ -1187,6 +1204,7 @@ function AdminTable({ records }: { records: TrainingRecord[] }) {
             <th>完成时间</th>
             <th>状态</th>
             <th>得分</th>
+            {onSelect && <th>操作</th>}
           </tr>
         </thead>
         <tbody>
@@ -1205,11 +1223,24 @@ function AdminTable({ records }: { records: TrainingRecord[] }) {
               <td>
                 <b>{record.evaluation.overallScore}</b>
               </td>
+              {onSelect && (
+                <td>
+                  <button
+                    className="text-link"
+                    onClick={() => onSelect(record)}
+                  >
+                    评审
+                  </button>
+                </td>
+              )}
             </tr>
           ))}
           {!records.length && (
             <tr>
-              <td colSpan={5} className="text-center text-slate-400">
+              <td
+                colSpan={onSelect ? 6 : 5}
+                className="text-center text-slate-400"
+              >
                 暂无已保存训练记录
               </td>
             </tr>
@@ -1311,7 +1342,7 @@ function Reviews({
   onReview,
 }: {
   records: TrainingRecord[];
-  onReview: () => void;
+  onReview: (record: TrainingRecord) => void;
 }) {
   return (
     <Page>
@@ -1343,59 +1374,89 @@ function Reviews({
         />
       </div>
       <div className="card mt-5 overflow-hidden">
-        <AdminTable records={records} />
-        {!!records.length && (
-          <button onClick={onReview} className="btn-primary m-5">
-            打开人工评分面板
-          </button>
-        )}
+        <AdminTable records={records} onSelect={onReview} />
       </div>
     </Page>
   );
 }
-function ReviewPanel({ onDone }: { onDone: () => void }) {
-  const [scores, setScores] = useState<number[]>(scoreRows.map((r) => r[1]));
+function ReviewPanel({
+  record,
+  onDone,
+}: {
+  record: TrainingRecord;
+  onDone: (updated?: TrainingRecord) => void;
+}) {
+  const [scores, setScores] = useState<number[]>([
+    record.evaluation.scores.needsDiscovery,
+    record.evaluation.scores.communication,
+    record.evaluation.scores.knowledge,
+    record.evaluation.scores.objectionHandling,
+    record.evaluation.scores.conversationControl,
+    record.evaluation.scores.closing,
+  ]);
+  const [strengths, setStrengths] = useState(record.evaluation.strengths);
+  const [improvements, setImprovements] = useState(
+    record.evaluation.improvements,
+  );
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  const save = async () => {
+    setSaving(true);
+    setSaveError("");
+    const evaluation = {
+      scores: {
+        needsDiscovery: scores[0],
+        communication: scores[1],
+        knowledge: scores[2],
+        objectionHandling: scores[3],
+        conversationControl: scores[4],
+        closing: scores[5],
+      },
+      overallScore: scores.reduce((sum, score) => sum + score, 0),
+      strengths,
+      improvements,
+      deductions: record.evaluation.deductions,
+    };
+    try {
+      const response = await fetch("/api/training-records", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: record.id, evaluation }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "保存失败");
+      onDone(result);
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "保存失败");
+    } finally {
+      setSaving(false);
+    }
+  };
   return (
     <div className="grid min-h-[calc(100vh-72px)] lg:grid-cols-2">
       <section className="border-r bg-[#f7f9f8] p-6 lg:p-8">
         <button
-          onClick={onDone}
+          onClick={() => onDone()}
           className="flex gap-2 text-xs font-semibold text-slate-500"
         >
           <ArrowLeft size={15} />
           返回评审列表
         </button>
-        <h1 className="mt-6 text-xl font-bold">Jamie Lee 的训练对话</h1>
+        <h1 className="mt-6 text-xl font-bold">{record.learner} 的训练对话</h1>
         <p className="mt-1 text-xs text-slate-500">
-          485 市场营销客户 · 8分42秒
+          {record.scenario.title} · {Math.floor(record.durationSeconds / 60)}分
+          {record.durationSeconds % 60}秒
         </p>
         <div className="mt-6 rounded-2xl bg-white p-6">
-          {[
-            [
-              "CUSTOMER",
-              "你好，我的 485 签证只剩大约 9 个月了。我在市场营销行业工作，想知道能不能申请 482。",
-            ],
-            [
-              "STUDENT",
-              "您好。为了判断可行性，我想先了解您目前的职位、工作经验以及雇主是否愿意提供担保？",
-            ],
-            [
-              "CUSTOMER",
-              "我大约有一年经验，但不是都在同一家公司。这会有影响吗？",
-            ],
-            [
-              "STUDENT",
-              "相关工作经验通常可以累计评估。您目前的雇主是否已经有担保资质？",
-            ],
-          ].map((m, i) => (
+          {record.messages.map((message) => (
             <div
-              key={i}
-              className={`mb-4 flex ${m[0] === "STUDENT" ? "justify-end" : ""}`}
+              key={message.id}
+              className={`mb-4 flex ${message.sender === "STUDENT" ? "justify-end" : ""}`}
             >
               <div
-                className={`max-w-[82%] rounded-xl px-4 py-3 text-xs leading-6 ${m[0] === "STUDENT" ? "bg-brand text-white" : "bg-slate-100"}`}
+                className={`max-w-[82%] rounded-xl px-4 py-3 text-xs leading-6 ${message.sender === "STUDENT" ? "bg-brand text-white" : "bg-slate-100"}`}
               >
-                {m[1]}
+                {message.content}
               </div>
             </div>
           ))}
@@ -1434,21 +1495,36 @@ function ReviewPanel({ onDone }: { onDone: () => void }) {
           <b>综合得分</b>
           <b className="text-2xl">{scores.reduce((a, b) => a + b, 0)} / 100</b>
         </div>
-        {["表现亮点", "提升建议", "培训师反馈"].map((x) => (
-          <div className="mt-5" key={x}>
-            <label className="label">{x}</label>
-            <textarea
-              className="input"
-              rows={2}
-              defaultValue="沟通专业，能够识别关键信息。建议进一步使用开放式问题推进对话。"
-            />
-          </div>
-        ))}
+        <div className="mt-5">
+          <label className="label">表现亮点</label>
+          <textarea
+            className="input"
+            rows={3}
+            value={strengths}
+            onChange={(event) => setStrengths(event.target.value)}
+          />
+        </div>
+        <div className="mt-5">
+          <label className="label">提升建议 / 培训师反馈</label>
+          <textarea
+            className="input"
+            rows={4}
+            value={improvements}
+            onChange={(event) => setImprovements(event.target.value)}
+          />
+        </div>
+        {saveError && <p className="mt-4 text-xs text-red-600">{saveError}</p>}
         <div className="mt-6 flex gap-3">
-          <button className="btn-secondary flex-1">保存草稿</button>
-          <button onClick={onDone} className="btn-primary flex-1">
+          <button onClick={() => onDone()} className="btn-secondary flex-1">
+            取消
+          </button>
+          <button
+            onClick={() => void save()}
+            disabled={saving}
+            className="btn-primary flex-1"
+          >
             <Check size={16} />
-            提交评审
+            {saving ? "保存中…" : "提交并保存评审"}
           </button>
         </div>
       </section>
@@ -1626,7 +1702,7 @@ export default function App() {
     null,
   );
   const [records, setRecords] = useState<TrainingRecord[]>([]);
-  const [review, setReview] = useState(false);
+  const [review, setReview] = useState<TrainingRecord | null>(null);
   useEffect(() => {
     fetch("/api/auth/session", { cache: "no-store" })
       .then(async (response) => (response.ok ? response.json() : null))
@@ -1640,10 +1716,19 @@ export default function App() {
   }, []);
   useEffect(() => {
     if (!role) return;
-    fetch("/api/training-records", { cache: "no-store" })
-      .then(async (response) => (response.ok ? response.json() : []))
-      .then((savedRecords) => setRecords(savedRecords));
-  }, [role]);
+    const refreshRecords = () => {
+      fetch("/api/training-records", { cache: "no-store" })
+        .then(async (response) => (response.ok ? response.json() : []))
+        .then((savedRecords) => setRecords(savedRecords));
+    };
+    refreshRecords();
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") refreshRecords();
+    };
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    return () =>
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+  }, [role, adminView, studentView]);
   const logout = async () => {
     await fetch("/api/auth/logout", { method: "POST" });
     setRole(null);
@@ -1767,13 +1852,24 @@ export default function App() {
       onLogout={() => void logout()}
     >
       {review ? (
-        <ReviewPanel onDone={() => setReview(false)} />
+        <ReviewPanel
+          record={review}
+          onDone={(updated) => {
+            if (updated)
+              setRecords((current) =>
+                current.map((record) =>
+                  record.id === updated.id ? updated : record,
+                ),
+              );
+            setReview(null);
+          }}
+        />
       ) : adminView === "dashboard" ? (
         <AdminDashboard setView={setAdminView} records={records} />
       ) : adminView === "customers" ? (
         <Customers />
       ) : adminView === "reviews" ? (
-        <Reviews records={records} onReview={() => setReview(true)} />
+        <Reviews records={records} onReview={setReview} />
       ) : (
         <GenericAdmin view={adminView} />
       )}

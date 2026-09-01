@@ -49,3 +49,42 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: String(error) }, { status: 503 });
   }
 }
+
+export async function PATCH(request: Request) {
+  try {
+    const session = await readSession();
+    if (session?.role !== "admin")
+      return NextResponse.json(
+        { error: "仅管理员可以提交评审" },
+        { status: 403 },
+      );
+    const { id, evaluation } = await request.json();
+    if (!id || !evaluation?.scores || !Number.isFinite(evaluation.overallScore))
+      return NextResponse.json({ error: "评审数据无效" }, { status: 400 });
+    const sql = await ensureSchema();
+    const existing = await sql`
+      SELECT data FROM redbridge_training_records WHERE id = ${id}
+    `;
+    if (!existing.length)
+      return NextResponse.json({ error: "训练记录不存在" }, { status: 404 });
+    const updated = {
+      ...existing[0].data,
+      evaluation: {
+        ...existing[0].data.evaluation,
+        ...evaluation,
+        reviewedBy: session.name,
+        reviewedAt: new Date().toISOString(),
+        source: "human",
+      },
+    };
+    const rows = await sql`
+      UPDATE redbridge_training_records
+      SET data = ${JSON.stringify(updated)}::jsonb
+      WHERE id = ${id}
+      RETURNING data
+    `;
+    return NextResponse.json(rows[0].data);
+  } catch (error) {
+    return NextResponse.json({ error: String(error) }, { status: 503 });
+  }
+}
