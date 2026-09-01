@@ -692,6 +692,9 @@ function Chat({
   ]);
   const [text, setText] = useState("");
   const [typing, setTyping] = useState(false);
+  const [responseMode, setResponseMode] = useState<
+    "connecting" | "ai" | "mock"
+  >("connecting");
   const [secs, setSecs] = useState(0);
   const end = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -702,16 +705,44 @@ function Chat({
     () => end.current?.scrollIntoView({ behavior: "smooth" }),
     [messages, typing],
   );
-  const send = () => {
+  const send = async () => {
     if (!text.trim() || typing) return;
     const content = text.trim();
+    const history = messages.map(({ sender, content: messageContent }) => ({
+      sender,
+      content: messageContent,
+    }));
     setText("");
     setMessages((m) => [
       ...m,
       { id: makeMessageId(), sender: "STUDENT", content, time: "现在" },
     ]);
     setTyping(true);
-    setTimeout(() => {
+    try {
+      const response = await fetch("/api/customer-response", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          scenario,
+          conversationHistory: history,
+          studentMessage: content,
+        }),
+      });
+      if (!response.ok) throw new Error("AI response unavailable");
+      const result = (await response.json()) as { content?: string };
+      if (!result.content?.trim()) throw new Error("AI response was empty");
+      setMessages((m) => [
+        ...m,
+        {
+          id: makeMessageId(),
+          sender: "CUSTOMER",
+          content: result.content!.trim(),
+          time: "现在",
+        },
+      ]);
+      setResponseMode("ai");
+    } catch {
+      await new Promise((resolve) => setTimeout(resolve, 700));
       setMessages((m) => [
         ...m,
         {
@@ -721,8 +752,10 @@ function Chat({
           time: "现在",
         },
       ]);
+      setResponseMode("mock");
+    } finally {
       setTyping(false);
-    }, 900);
+    }
   };
   return (
     <div className="flex h-[calc(100vh-72px)] min-h-[680px] bg-white">
@@ -765,7 +798,11 @@ function Chat({
             <b className="block text-sm">{scenario.title}</b>
             <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-600">
               <i className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
-              模拟模式 · 训练中
+              {responseMode === "ai"
+                ? "AI 客户 · 训练中"
+                : responseMode === "mock"
+                  ? "Mock 回退 · 训练中"
+                  : "正在连接 AI · 训练中"}
             </span>
           </div>
           <span className="flex gap-2 rounded-lg bg-slate-100 px-3 py-2 font-mono text-xs">
