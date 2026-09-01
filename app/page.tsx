@@ -665,6 +665,16 @@ function TrainingLibrary({ onStart }: { onStart: (s: Scenario) => void }) {
   );
 }
 
+const makeMessageId = () =>
+  globalThis.crypto?.randomUUID?.() ??
+  `message-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+const demoPrompts = [
+  "可以介绍一下您的工作经验吗？",
+  "您的雇主愿意提供担保吗？",
+  "您最担心的是费用还是时间？",
+];
+
 function Chat({
   scenario,
   onEnd,
@@ -700,14 +710,14 @@ function Chat({
     setText("");
     setMessages((m) => [
       ...m,
-      { id: crypto.randomUUID(), sender: "STUDENT", content, time: "现在" },
+      { id: makeMessageId(), sender: "STUDENT", content, time: "现在" },
     ]);
     setTyping(true);
     setTimeout(() => {
       setMessages((m) => [
         ...m,
         {
-          id: crypto.randomUUID(),
+          id: makeMessageId(),
           sender: "CUSTOMER",
           content: mockReply(content),
           time: "现在",
@@ -755,7 +765,10 @@ function Chat({
         <div className="flex h-16 items-center justify-between border-b bg-white px-5">
           <div>
             <b className="block text-sm">{scenario.title}</b>
-            <span className="text-[11px] text-emerald-600">● 模拟客户在线</span>
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-600">
+              <i className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
+              模拟模式 · 训练中
+            </span>
           </div>
           <span className="flex gap-2 rounded-lg bg-slate-100 px-3 py-2 font-mono text-xs">
             <Timer size={14} />
@@ -797,6 +810,18 @@ function Chat({
           </div>
         </div>
         <div className="border-t bg-white p-4">
+          <div className="mx-auto mb-3 flex max-w-3xl gap-2 overflow-x-auto pb-1">
+            {demoPrompts.map((prompt) => (
+              <button
+                key={prompt}
+                type="button"
+                onClick={() => setText(prompt)}
+                className="whitespace-nowrap rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-[11px] text-slate-600 transition hover:border-brand/30 hover:bg-mint hover:text-brand"
+              >
+                {prompt}
+              </button>
+            ))}
+          </div>
           <div className="mx-auto flex max-w-3xl gap-3">
             <textarea
               value={text}
@@ -1394,14 +1419,13 @@ function ResultTable() {
   );
 }
 function SimpleStudent({ view }: { view: StudentView }) {
-  const title =
-    {
-      dashboard: "工作台",
-      training: "训练中心",
-      assignments: "我的任务",
-      history: "训练记录",
-      performance: "能力表现",
-    }[view];
+  const title = {
+    dashboard: "工作台",
+    training: "训练中心",
+    assignments: "我的任务",
+    history: "训练记录",
+    performance: "能力表现",
+  }[view];
   return (
     <Page>
       <Title
