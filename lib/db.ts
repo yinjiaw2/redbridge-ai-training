@@ -80,5 +80,12 @@ export async function ensureSchema() {
     CREATE INDEX IF NOT EXISTS redbridge_training_records_username_idx
     ON redbridge_training_records (username, created_at DESC)
   `;
+  await sql`
+    CREATE TABLE IF NOT EXISTS redbridge_ai_profiles (
+      customer_id TEXT PRIMARY KEY,
+      data JSONB NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
   return sql;
 }

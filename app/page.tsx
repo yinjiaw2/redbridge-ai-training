@@ -54,6 +54,7 @@ type AdminView =
   | "scenarios"
   | "assignments"
   | "reviews"
+  | "ai-settings"
   | "analytics";
 type CustomerOutcome = "signed" | "frozen" | "considering" | "refused";
 const outcomeLabels: Record<CustomerOutcome, string> = {
@@ -299,6 +300,7 @@ const adminNav = [
   ["scenarios", "训练场景", MessageCircle],
   ["assignments", "任务分配", Target],
   ["reviews", "训练评审", CheckCircle2],
+  ["ai-settings", "AI 客户调教", Settings],
   ["analytics", "数据分析", BarChart3],
 ] as const;
 function Shell({
@@ -756,6 +758,10 @@ function Chat({
   >("connecting");
   const [secs, setSecs] = useState(0);
   const [choosingOutcome, setChoosingOutcome] = useState(false);
+  const [customerEnded, setCustomerEnded] = useState<{
+    messages: TrainingMessage[];
+    reason: string;
+  } | null>(null);
   const end = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const t = setInterval(() => setSecs((s) => s + 1), 1000);
@@ -812,11 +818,10 @@ function Chat({
       setMessages(completedMessages);
       setResponseMode("ai");
       if (result.failed) {
-        window.setTimeout(
-          () =>
-            onEnd(completedMessages, secs, "refused", customerMessage.content),
-          900,
-        );
+        setCustomerEnded({
+          messages: completedMessages,
+          reason: customerMessage.content,
+        });
       }
     } catch {
       await new Promise((resolve) => setTimeout(resolve, 700));
@@ -1008,6 +1013,38 @@ function Chat({
               className="mt-4 w-full text-xs font-semibold text-slate-500"
             >
               继续对话
+            </button>
+          </div>
+        </div>
+      )}
+      {customerEnded && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-5">
+          <div className="w-full max-w-md rounded-2xl border border-red-100 bg-white p-7 text-center shadow-2xl">
+            <div className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-red-50 text-brand">
+              <X size={22} />
+            </div>
+            <p className="mt-5 text-xs font-bold uppercase tracking-widest text-brand">
+              Conversation ended
+            </p>
+            <h2 className="mt-2 text-xl font-bold">客户已结束本次咨询</h2>
+            <p className="mt-3 rounded-xl bg-slate-50 p-4 text-left text-sm leading-6 text-slate-600">
+              “{customerEnded.reason}”
+            </p>
+            <p className="mt-4 text-xs leading-5 text-slate-500">
+              本次结果将记录为“客户拒绝聊”，并按照场景难度计算扣分。
+            </p>
+            <button
+              className="btn-primary mt-6 w-full"
+              onClick={() =>
+                onEnd(
+                  customerEnded.messages,
+                  secs,
+                  "refused",
+                  customerEnded.reason,
+                )
+              }
+            >
+              查看训练结果
             </button>
           </div>
         </div>
@@ -1590,6 +1627,118 @@ function ReviewPanel({
     </div>
   );
 }
+type AiCustomerProfile = {
+  customerId: string;
+  persona: string;
+  requirements: string;
+  behaviorRules: string;
+  failureRules: string;
+};
+function AiTrainingSettings() {
+  const [profiles, setProfiles] = useState<AiCustomerProfile[]>([]);
+  const [customerId, setCustomerId] = useState(demoScenarios[0].customerId);
+  const [form, setForm] = useState<AiCustomerProfile>({
+    customerId: demoScenarios[0].customerId,
+    persona: "有真实咨询需求，会根据顾问的专业度决定是否继续。",
+    requirements: demoScenarios[0].objective,
+    behaviorRules: "不哄学员，不提供提示；像真实客户一样提出质疑并评估服务。",
+    failureRules:
+      "学员明确表示不能提供服务、态度失礼或连续回答含糊时结束咨询。",
+  });
+  const [status, setStatus] = useState("");
+  useEffect(() => {
+    fetch("/api/ai-profiles", { cache: "no-store" })
+      .then(async (response) => (response.ok ? response.json() : []))
+      .then(setProfiles);
+  }, []);
+  useEffect(() => {
+    const scenario = demoScenarios.find(
+      (item) => item.customerId === customerId,
+    );
+    const saved = profiles.find((item) => item.customerId === customerId);
+    setForm(
+      saved || {
+        customerId,
+        persona: "有真实咨询需求，会根据顾问的专业度决定是否继续。",
+        requirements: scenario?.objective || "",
+        behaviorRules:
+          "不哄学员，不提供提示；像真实客户一样提出质疑并评估服务。",
+        failureRules:
+          "学员明确表示不能提供服务、态度失礼或连续回答含糊时结束咨询。",
+      },
+    );
+  }, [customerId, profiles]);
+  const save = async () => {
+    setStatus("保存中…");
+    const response = await fetch("/api/ai-profiles", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(form),
+    });
+    const result = await response.json();
+    if (response.ok) {
+      setProfiles((current) => [
+        result,
+        ...current.filter((item) => item.customerId !== result.customerId),
+      ]);
+      setStatus("已保存到 Neon");
+    } else setStatus(result.error || "保存失败");
+  };
+  return (
+    <Page>
+      <Title
+        eyebrow="AI customer coaching"
+        title="AI 客户调教"
+        copy="为每个模拟客户保存独立画像、需求、行为和终止规则。"
+      />
+      <div className="card mt-6 max-w-3xl p-6">
+        <label className="label">选择客户场景</label>
+        <select
+          className="input"
+          value={customerId}
+          onChange={(event) => setCustomerId(event.target.value)}
+        >
+          {demoScenarios.map((scenario) => (
+            <option key={scenario.id} value={scenario.customerId}>
+              C{scenario.customerId} · {scenario.title}
+            </option>
+          ))}
+        </select>
+        {[
+          ["persona", "客户画像"],
+          ["requirements", "客户真实需求"],
+          ["behaviorRules", "沟通行为规则"],
+          ["failureRules", "结束咨询规则"],
+        ].map(([key, label]) => (
+          <div className="mt-5" key={key}>
+            <label className="label">{label}</label>
+            <textarea
+              className="input"
+              rows={3}
+              value={form[key as keyof AiCustomerProfile]}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  [key]: event.target.value,
+                }))
+              }
+            />
+          </div>
+        ))}
+        <div className="mt-6 rounded-xl bg-amber-50 p-4 text-xs leading-5 text-amber-800">
+          目前配置安全保存在 Neon。启用 OpenAI
+          画像注入前，只能填写虚构或已完全匿名化的信息。
+        </div>
+        <div className="mt-5 flex items-center gap-4">
+          <button className="btn-primary" onClick={() => void save()}>
+            保存客户配置
+          </button>
+          <span className="text-xs text-slate-500">{status}</span>
+        </div>
+      </div>
+    </Page>
+  );
+}
 function GenericAdmin({ view }: { view: AdminView }) {
   const map: any = {
     students: ["学员管理", "创建、停用学员并查看个人训练表现。", Users],
@@ -1605,6 +1754,7 @@ function GenericAdmin({ view }: { view: AdminView }) {
     ],
     assignments: ["任务分配", "将训练场景分配给学员并跟踪完成情况。", Target],
     analytics: ["数据分析", "按学员、场景与能力维度洞察训练效果。", BarChart3],
+    "ai-settings": ["AI 客户调教", "按客户保存独立画像与对话规则。", Settings],
   };
   const [title, copy, Icon] = map[view];
   return (
@@ -1939,6 +2089,8 @@ export default function App() {
         <Customers />
       ) : adminView === "reviews" ? (
         <Reviews records={records} onReview={setReview} />
+      ) : adminView === "ai-settings" ? (
+        <AiTrainingSettings />
       ) : (
         <GenericAdmin view={adminView} />
       )}
