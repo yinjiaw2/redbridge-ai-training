@@ -664,7 +664,6 @@ function TrainingLibrary({ onStart }: { onStart: (s: Scenario) => void }) {
 }
 
 const makeMessageId = () =>
-  globalThis.crypto?.randomUUID?.() ??
   `message-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
 const demoPrompts = [
