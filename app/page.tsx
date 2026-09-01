@@ -102,21 +102,19 @@ function Login({ onLogin }: { onLogin: (r: Role) => void }) {
   return (
     <main className="login-shell min-h-screen p-4 sm:p-7">
       <div className="mx-auto grid min-h-[calc(100vh-56px)] max-w-[1240px] overflow-hidden rounded-[30px] bg-white shadow-[0_26px_80px_rgba(31,52,44,.13)] lg:grid-cols-[1.08fr_.92fr]">
-        <section className="relative hidden overflow-hidden bg-[#173f34] p-14 text-white lg:flex lg:flex-col lg:justify-between">
-          <div className="absolute -right-24 -top-24 h-80 w-80 rounded-full bg-[#4da57f]/20 blur-2xl" />
+        <section className="relative hidden overflow-hidden bg-[#18181b] p-14 text-white lg:flex lg:flex-col lg:justify-between">
+          <div className="absolute -right-24 -top-24 h-80 w-80 rounded-full bg-[#b11217]/35 blur-2xl" />
           <div className="relative flex items-center gap-3">
             <div className="grid h-11 w-11 place-items-center rounded-xl bg-white/10">
               <MessageCircle />
             </div>
             <div>
               <b>Redbridge</b>
-              <div className="text-xs text-emerald-100/70">
-                Customer Training
-              </div>
+              <div className="text-xs text-red-100/70">Customer Training</div>
             </div>
           </div>
           <div className="relative max-w-xl">
-            <span className="rounded-full bg-white/10 px-3 py-1 text-xs text-emerald-100">
+            <span className="rounded-full bg-white/10 px-3 py-1 text-xs text-red-100">
               情景实训 · 即时反馈
             </span>
             <h1 className="mt-7 text-5xl font-semibold leading-[1.12] tracking-[-.035em]">
@@ -124,7 +122,7 @@ function Login({ onLogin }: { onLogin: (r: Role) => void }) {
               <br />
               变成专业能力。
             </h1>
-            <p className="mt-6 max-w-lg text-lg leading-8 text-emerald-50/70">
+            <p className="mt-6 max-w-lg text-lg leading-8 text-zinc-200/80">
               在安全、真实的模拟场景中练习需求挖掘、异议处理与成交引导。
             </p>
             <div className="mt-10 grid grid-cols-3 gap-4 border-t border-white/10 pt-7 text-sm">
@@ -135,12 +133,12 @@ function Login({ onLogin }: { onLogin: (r: Role) => void }) {
               ].map((x) => (
                 <div key={x[1]}>
                   <b className="block text-2xl">{x[0]}</b>
-                  <span className="text-emerald-100/60">{x[1]}</span>
+                  <span className="text-zinc-300/70">{x[1]}</span>
                 </div>
               ))}
             </div>
           </div>
-          <p className="relative text-xs text-emerald-100/50">
+          <p className="relative text-xs text-zinc-400">
             © 2026 Redbridge Group · Phase 1 Mock Environment
           </p>
         </section>
@@ -266,7 +264,7 @@ function Shell({
   const [open, setOpen] = useState(false);
   const nav = role === "admin" ? adminNav : studentNav;
   return (
-    <div className="min-h-screen bg-[#f6f8f7]">
+    <div className="min-h-screen bg-[#f7f7f8]">
       <aside
         className={`fixed inset-y-0 left-0 z-40 w-[248px] border-r border-slate-200 bg-white p-5 transition lg:translate-x-0 ${open ? "translate-x-0" : "-translate-x-full"}`}
       >
@@ -276,7 +274,7 @@ function Shell({
             <X />
           </button>
         </div>
-        <div className="mt-8 rounded-xl bg-[#eef6f2] p-3">
+        <div className="mt-8 rounded-xl border border-[#f5d5d6] bg-[#fdf0f0] p-3">
           <p className="text-[10px] font-bold uppercase tracking-widest text-brand">
             {role === "admin" ? "Admin workspace" : "Student workspace"}
           </p>
@@ -485,9 +483,9 @@ function StudentDashboard({
   return (
     <Page>
       <div className="hero-card relative overflow-hidden rounded-2xl p-7 text-white">
-        <p className="text-sm text-emerald-100">星期二，9月1日</p>
+        <p className="text-sm text-zinc-300">星期二，9月1日</p>
         <h1 className="mt-2 text-3xl font-semibold">早上好，Jamie 👋</h1>
-        <p className="mt-2 text-sm text-emerald-50/75">
+        <p className="mt-2 text-sm text-zinc-300/90">
           今天继续精进客户沟通技巧，你有 2 项训练待完成。
         </p>
       </div>
@@ -526,7 +524,7 @@ function StudentDashboard({
               查看全部 <ChevronRight size={14} />
             </button>
           </div>
-          <div className="mt-5 rounded-2xl border border-emerald-100 bg-[#f1f8f4] p-5">
+          <div className="mt-5 rounded-2xl border border-[#f5d5d6] bg-[#fdf0f0] p-5">
             <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-center">
               <div className="flex gap-4">
                 <div className="grid h-12 w-12 place-items-center rounded-xl bg-white text-brand">
@@ -617,7 +615,7 @@ function TrainingLibrary({ onStart }: { onStart: (s: Scenario) => void }) {
           .map((s, i) => (
             <div className="card overflow-hidden" key={s.id}>
               <div
-                className={`h-2 ${["bg-brand", "bg-[#d5a85a]", "bg-blue-500"][i % 3]}`}
+                className={`h-2 ${["bg-brand", "bg-[#18181b]", "bg-[#7f1d1d]"][i % 3]}`}
               />
               <div className="p-5">
                 <div className="flex justify-between">
@@ -761,7 +759,7 @@ function Chat({
           隐藏客户心理、信任度与内部备注。
         </div>
       </aside>
-      <main className="flex min-w-0 flex-1 flex-col bg-[#f5f7f6]">
+      <main className="flex min-w-0 flex-1 flex-col bg-[#f7f7f8]">
         <div className="flex h-16 items-center justify-between border-b bg-white px-5">
           <div>
             <b className="block text-sm">{scenario.title}</b>
@@ -787,7 +785,7 @@ function Chat({
                 className={`mb-5 flex gap-3 ${m.sender === "STUDENT" ? "flex-row-reverse" : ""}`}
               >
                 <div
-                  className={`grid h-8 w-8 shrink-0 place-items-center rounded-full text-[10px] font-bold text-white ${m.sender === "STUDENT" ? "bg-[#d9a64e]" : "bg-brand"}`}
+                  className={`grid h-8 w-8 shrink-0 place-items-center rounded-full text-[10px] font-bold text-white ${m.sender === "STUDENT" ? "bg-[#18181b]" : "bg-brand"}`}
                 >
                   {m.sender === "STUDENT" ? "JL" : "C"}
                 </div>
@@ -891,14 +889,14 @@ function Result({
         <ArrowLeft size={15} />
         返回训练记录
       </button>
-      <div className="rounded-2xl bg-[#173f34] p-8 text-white">
+      <div className="rounded-2xl bg-[#18181b] p-8 text-white">
         <div className="flex flex-col justify-between gap-6 md:flex-row">
           <div>
             <Pill tone="green">已完成评审</Pill>
             <h1 className="mt-4 text-2xl font-bold">
               485 市场营销客户 — 价格敏感型
             </h1>
-            <p className="mt-2 text-sm text-emerald-100/70">
+            <p className="mt-2 text-sm text-zinc-300">
               完成于 2026年9月1日 · 用时 08:42
             </p>
           </div>
@@ -1056,7 +1054,7 @@ function AdminDashboard({ setView }: { setView: (v: AdminView) => void }) {
           {[34, 58, 42, 76, 55, 88, 68].map((n, i) => (
             <div key={i} className="flex flex-1 flex-col items-center gap-2">
               <div
-                className="w-full max-w-12 rounded-t-md bg-[#4d9476]"
+                className="w-full max-w-12 rounded-t-md bg-brand/80"
                 style={{ height: `${n}%` }}
               />
               <span className="text-[10px] text-slate-400">
@@ -1305,7 +1303,7 @@ function ReviewPanel({ onDone }: { onDone: () => void }) {
                     s.map((x, j) => (j === i ? +e.target.value : x)),
                   )
                 }
-                className="mt-2 w-full accent-[#2f6e55]"
+                className="mt-2 w-full accent-[#b11217]"
               />
             </div>
           ))}
