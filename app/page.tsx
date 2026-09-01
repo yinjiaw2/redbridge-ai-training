@@ -700,10 +700,9 @@ function Chat({
     const t = setInterval(() => setSecs((s) => s + 1), 1000);
     return () => clearInterval(t);
   }, []);
-  useEffect(
-    () => end.current?.scrollIntoView({ behavior: "smooth" }),
-    [messages, typing],
-  );
+  useEffect(() => {
+    end.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, typing]);
   const send = async () => {
     if (!text.trim() || typing) return;
     const content = text.trim();
